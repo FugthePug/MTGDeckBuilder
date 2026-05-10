@@ -113,10 +113,39 @@
       font-size: 1rem;
       cursor: pointer;
       transition: transform 0.15s ease, border 0.15s ease, box-shadow 0.15s ease;
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      color: white;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.75);
     }
 
     .color-btn:hover {
       transform: scale(1.08);
+    }
+
+    .color-btn img.color-icon {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: 0.95;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .color-btn:hover img.color-icon {
+      transform: scale(1.05);
+      opacity: 1;
+    }
+
+    .color-btn .color-label {
+      position: relative;
+      z-index: 1;
+      display: block;
     }
 
     .color-btn.active {
@@ -160,25 +189,28 @@
     <h1>Random Commander Generator</h1>
 
     <p>
-      Enter your commander color identity using:
-      <br><br>
-      W = White<br>
-      U = Blue<br>
-      B = Black<br>
-      R = Red<br>
-      G = Green<br>
-      C = Colorless
+      Select your commander's color identity!
     </p>
 
-    <label>Select Commander Colors</label>
-
     <div class="color-selector">
-      <button class="color-btn white" data-color="w">W</button>
-      <button class="color-btn blue" data-color="u">U</button>
-      <button class="color-btn black" data-color="b">B</button>
-      <button class="color-btn red" data-color="r">R</button>
-      <button class="color-btn green" data-color="g">G</button>
-      <button class="color-btn colorless" data-color="c">C</button>
+      <button class="color-btn white" data-color="w">
+        <img class="color-icon" src="colorIcons/white.jpg" alt="White icon">
+      </button>
+      <button class="color-btn blue" data-color="u">
+        <img class="color-icon" src="colorIcons/Blue.jpg" alt="Blue icon">
+      </button>
+      <button class="color-btn black" data-color="b">
+        <img class="color-icon" src="colorIcons/Black.jpg" alt="Black icon">
+      </button>
+      <button class="color-btn red" data-color="r">
+        <img class="color-icon" src="colorIcons/Red.png" alt="Red icon">
+      </button>
+      <button class="color-btn green" data-color="g">
+        <img class="color-icon" src="colorIcons/Green.jpg" alt="Green icon">
+      </button>
+      <button class="color-btn colorless" data-color="c">
+        <img class="color-icon" src="colorIcons/Colorless.png" alt="Colorless icon">
+      </button>
     </div>
 
     <button id="generateBtn">Generate Random Commander</button>
@@ -197,8 +229,6 @@
     const colorButtons = document.querySelectorAll('.color-btn');
 
     let selectedColors = [];
-
-    const colorRegex = /^(?!.*(.).*\1)[wubrg]{1,5}$/;
 
     colorButtons.forEach(button => {
       button.addEventListener('click', () => {
@@ -239,13 +269,6 @@
       resultDiv.innerHTML = '';
       errorDiv.textContent = '';
       loadingDiv.textContent = '';
-
-      // Validate input
-      if (!(colorRegex.test(userColors) || userColors === 'c')) {
-        errorDiv.textContent =
-          'Invalid color identity. Please use unique combinations of W, U, B, R, and G.';
-        return;
-      }
 
       loadingDiv.textContent = 'Fetching random commander...';
 
