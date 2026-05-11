@@ -152,45 +152,12 @@
       const planeswalkersDeck = [];
       let basicLandCount = basicLands;
 
-      function selectUniqueCards(sourceCards, requestedCount) {
-        const selected = [];
-        const seen = new Set();
-        const shuffled = [...sourceCards].sort(() => Math.random() - 0.5);
-
-        for (const card of shuffled) {
-          if (!seen.has(card.name)) {
-            seen.add(card.name);
-            selected.push(card);
-            if (selected.length === requestedCount) {
-              break;
-            }
-          }
-        }
-
-        const shortage = Math.max(0, requestedCount - selected.length);
-        return { selected, shortage };
-      }
-
-      async function fetchCardsByType(typeQuery, requestedCount) {
-        if(requestedCount === 0) {
-          return { selected: [], shortage: 0 };
-        }
-        const query = encodeURIComponent(`type:${typeQuery} legal:edh id<=${commanderColors} -is:commander`);
-        const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch cards from Scryfall.');
-        }
-        const results = await response.json();
-        const firstPageCards = Array.isArray(results.data) ? results.data : [];
-        return selectUniqueCards(firstPageCards, requestedCount);
-      }
-
-      const creatureSelection = await fetchCardsByType('creature', creatures);
-      const artifactSelection = await fetchCardsByType('artifact', artifacts);
-      const landSelection = await fetchCardsByType('land -type:basic', lands);
-      const instantSelection = await fetchCardsByType('instant', instants);
-      const sorcerySelection = await fetchCardsByType('sorcery', sorceries);
-      const planeswalkerSelection = await fetchCardsByType('planeswalker', planeswalkers);
+      const creatureSelection = await fetchCardsByType('creature', creatures, commanderColors);
+      const artifactSelection = await fetchCardsByType('artifact', artifacts, commanderColors);
+      const landSelection = await fetchCardsByType('land -type:basic', lands, commanderColors);
+      const instantSelection = await fetchCardsByType('instant', instants, commanderColors);
+      const sorcerySelection = await fetchCardsByType('sorcery', sorceries, commanderColors);
+      const planeswalkerSelection = await fetchCardsByType('planeswalker', planeswalkers, commanderColors);
 
       creaturesDeck.push(...creatureSelection.selected);
       artifactsDeck.push(...artifactSelection.selected);
@@ -206,92 +173,151 @@
       basicLandCount += sorcerySelection.shortage;
       basicLandCount += planeswalkerSelection.shortage;
 
-      const displayGroups = [
-        { label: 'Creatures', cards: creaturesDeck },
-        { label: 'Artifacts', cards: artifactsDeck },
-        { label: 'Instants', cards: instantsDeck },
-        { label: 'Sorceries', cards: sorceriesDeck },
-        { label: 'Planeswalkers', cards: planeswalkersDeck }
-      ];
+      displayDeck(creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck, commanderColors, basicLandCount, deckResultDiv);
+    }
 
-      [creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck].forEach(arr =>
-        arr.sort((a, b) => a.name.localeCompare(b.name))
-      );
+    function selectUniqueCards(sourceCards, requestedCount) {
+        const selected = [];
+        const seen = new Set();
+        shuffleCards(sourceCards);
+        //const shuffled = [...sourceCards].sort(() => Math.random() - 0.5);
 
-      let html = '';
-      displayGroups.forEach(group => {
-        if (group.cards.length > 0) {
-          html += `<h4>${group.label} (${group.cards.length})</h4><ul>`;
-          group.cards.forEach(card => {
-            html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
-          });
-          html += '</ul>';
-        }
-      });
-
-      const totalLandCount = landsDeck.length + basicLandCount;
-      const basicLandEntries = [];
-
-      if (basicLandCount > 0) {
-        const displayOrder = ['w', 'u', 'b', 'r', 'g', 'c'];
-        const landNameMap = {
-          w: 'Plains',
-          u: 'Island',
-          b: 'Swamp',
-          r: 'Mountain',
-          g: 'Forest',
-          c: 'Wasteland'
-        };
-
-        let colorKeys = commanderColors
-          .split('')
-          .filter(c => displayOrder.includes(c))
-          .sort((a, b) => displayOrder.indexOf(a) - displayOrder.indexOf(b));
-
-        if (colorKeys.length === 0) {
-          colorKeys = ['c'];
-        }
-
-        const perColor = Math.floor(basicLandCount / colorKeys.length);
-        let extra = basicLandCount % colorKeys.length;
-
-        colorKeys.forEach(color => {
-          let count = perColor;
-          if (extra > 0) {
-            count += 1;
-            extra -= 1;
+        for (const card of sourceCards) {
+          if (!seen.has(card.name)) {
+            seen.add(card.name);
+            selected.push(card);
+            if (selected.length === requestedCount) {
+              break;
+            }
           }
-          if (count > 0) {
-            basicLandEntries.push({ name: landNameMap[color], count });
+        }
+
+        const shortage = Math.max(0, requestedCount - selected.length);
+        return { selected, shortage };
+      }
+
+      function shuffleCards(cardList) {
+        let currentIndex = cardList.length;
+
+        // While there remain elements to shuffle...
+        while (currentIndex != 0) {
+
+          // Pick a remaining element...
+          let randomIndex = Math.floor(Math.random() * currentIndex);
+          currentIndex--;
+
+          // And swap it with the current element.
+          [cardList[currentIndex], cardList[randomIndex]] = [
+            cardList[randomIndex], cardList[currentIndex]];
+        }
+      }
+
+    async function fetchCardsByType(typeQuery, requestedCount, commanderColors) {
+        if (requestedCount === 0) {
+          return { selected: [], shortage: 0 };
+        }
+        const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
+        const query = encodeURIComponent(`type:${typeQuery} legal:edh id<=${commanderColors} -is:commander`);
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=edhrec`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch cards from Scryfall.');
+        }
+        const results = await response.json();
+        const pageCount = Math.ceil(results.total_cards / 175);
+        const randomPageNumber = Math.floor(Math.random() * pageCount) + 1;
+        const randomPageResponse = await fetch(`https://api.scryfall.com/cards/search?q=${query}&order=edhrec&page=${randomPageNumber}`);
+        const randomPageResults = await randomPageResponse.json();
+        const firstPageCards = Array.isArray(randomPageResults.data) ? randomPageResults.data : [];
+        return selectUniqueCards(firstPageCards, requestedCount);
+        await sleep(1000); //Pausing here to not transgress the access limit of Scryfall's API
+      }
+
+      function displayDeck(creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck, commanderColors, basicLandCount, deckResultDiv) {
+        const displayGroups = [
+          { label: 'Creatures', cards: creaturesDeck },
+          { label: 'Artifacts', cards: artifactsDeck },
+          { label: 'Instants', cards: instantsDeck },
+          { label: 'Sorceries', cards: sorceriesDeck },
+          { label: 'Planeswalkers', cards: planeswalkersDeck }
+        ];
+
+        [creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck].forEach(arr =>
+          arr.sort((a, b) => a.name.localeCompare(b.name))
+        );
+
+        let html = '';
+        displayGroups.forEach(group => {
+          if (group.cards.length > 0) {
+            html += `<h4>${group.label} (${group.cards.length})</h4><ul>`;
+            group.cards.forEach(card => {
+              html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+            });
+            html += '</ul>';
           }
         });
-      }
 
-      if (landsDeck.length > 0 || basicLandEntries.length > 0) {
-        html += `<h4>Lands (${totalLandCount})</h4>`;
+        const totalLandCount = landsDeck.length + basicLandCount;
+        const basicLandEntries = [];
 
-        if (landsDeck.length > 0) {
-          landsDeck.forEach(card => {
-            html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+        if (basicLandCount > 0) {
+          const displayOrder = ['w', 'u', 'b', 'r', 'g', 'c'];
+          const landNameMap = {
+            w: 'Plains',
+            u: 'Island',
+            b: 'Swamp',
+            r: 'Mountain',
+            g: 'Forest',
+            c: 'Wasteland'
+          };
+
+          let colorKeys = commanderColors
+            .split('')
+            .filter(c => displayOrder.includes(c))
+            .sort((a, b) => displayOrder.indexOf(a) - displayOrder.indexOf(b));
+
+          if (colorKeys.length === 0) {
+            colorKeys = ['c'];
+          }
+
+          const perColor = Math.floor(basicLandCount / colorKeys.length);
+          let extra = basicLandCount % colorKeys.length;
+
+          colorKeys.forEach(color => {
+            let count = perColor;
+            if (extra > 0) {
+              count += 1;
+              extra -= 1;
+            }
+            if (count > 0) {
+              basicLandEntries.push({ name: landNameMap[color], count });
+            }
           });
-          html += '</ul>';
         }
 
-        if (basicLandEntries.length > 0) {
-          const basicTotal = basicLandEntries.reduce((sum, entry) => sum + entry.count, 0);
-          basicLandEntries.forEach(entry => {
-            html += `<li>${entry.name} x ${entry.count}</li>`;
-          });
-          html += '</ul>';
+        if (landsDeck.length > 0 || basicLandEntries.length > 0) {
+          html += `<h4>Lands (${totalLandCount})</h4><ul>`;
+
+          if (landsDeck.length > 0) {
+            landsDeck.forEach(card => {
+              html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+            });
+          }
+
+          if (basicLandEntries.length > 0) {
+            const basicTotal = basicLandEntries.reduce((sum, entry) => sum + entry.count, 0);
+            basicLandEntries.forEach(entry => {
+              html += `<li>${entry.name} x ${entry.count}</li>`;
+            });
+          }
+            html += '</ul>';
+        }
+
+        deckResultDiv.innerHTML = html;
+        const clearDeckWindow = document.querySelector('.clear-deck-row');
+        if (clearDeckWindow) {
+          clearDeckWindow.classList.remove('hidden');
         }
       }
-
-      deckResultDiv.innerHTML = html;
-      const clearDeckWindow = document.querySelector('.clear-deck-row');
-      if (clearDeckWindow) {
-        clearDeckWindow.classList.remove('hidden');
-      }
-    }
 
     function clearDeck() {
       const deckResultDiv = document.getElementById('deckResult');
@@ -305,6 +331,8 @@
       if (clearDeckRow) {
         clearDeckRow.classList.add('hidden');
       }
+      errorDiv.textContent = '';
+      loadingDiv.textContent = '';
     }
 
     function clearCommander() {
@@ -314,6 +342,9 @@
       selectedColors = [];
       colorButtons.forEach(btn => btn.classList.remove('active'));
       updateButtonState();
+      if (document.getElementById('deckResult')) {
+        clearDeck();
+      }
       const clearDeckRow = document.querySelector('.clear-deck-row');
       if (clearDeckRow) {
         clearDeckRow.classList.add('hidden');
