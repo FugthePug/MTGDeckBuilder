@@ -310,3 +310,22 @@
     #deckResult li {
       margin: 0.25rem 0;
     }
+
+    @keyframes rainbowPulsate {
+      0% {
+        background: #005c8e;
+        box-shadow: 0 0 10px rgba(0, 131, 218, 0.4);
+      }
+      50% {
+        background: #0083da;
+        box-shadow: 0 0 18px rgba(0, 131, 218, 0.8);
+      }
+      100% {
+        background: #005c8e;
+        box-shadow: 0 0 10px rgba(0, 131, 218, 0.4);
+      }
+    }
+
+    .rainbow-pulsate {
+      animation: rainbowPulsate 2.5s ease-in-out infinite;
+    }
