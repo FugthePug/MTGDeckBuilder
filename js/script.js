@@ -139,7 +139,7 @@
       const planeswalkers = parseInt(document.getElementById('planeswalkers').value);
 
       const deckResultDiv = document.getElementById('deckResult');
-      deckResultDiv.innerHTML = 'Building deck. This will take at least one minute...';
+      deckResultDiv.innerHTML = 'Building deck...';
 
       const deckControls = document.querySelectorAll('.deck-controls input, #buildDeckBtn');
       deckControls.forEach(element => element.disabled = true);
@@ -164,10 +164,7 @@
             if (selected.length === requestedCount) {
               break;
             }
-          } catch (e) {
-            console.error('Error fetching card:', e);
           }
-          await new Promise(resolve => setTimeout(resolve, 550));
         }
 
         const shortage = Math.max(0, requestedCount - selected.length);
