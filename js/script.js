@@ -150,31 +150,19 @@
       const instantsDeck = [];
       const sorceriesDeck = [];
       const planeswalkersDeck = [];
-      const basicLandEntries = [];
+      let basicLandCount = basicLands;
 
-      // Function to fetch cards into a specific array
-      async function fetchCards(targetArray, count, query, unique = true, maxUniqueAttempts = Infinity) {
-        const names = new Set();
-        let added = 0;
-        let uniqueAttempts = 0;
+      function selectUniqueCards(sourceCards, requestedCount) {
+        const selected = [];
+        const seen = new Set();
+        const shuffled = [...sourceCards].sort(() => Math.random() - 0.5);
 
-        while (added < count && uniqueAttempts < maxUniqueAttempts) {
-          try {
-            const response = await fetch(`https://api.scryfall.com/cards/random?q=${query}`);
-            if (response.ok) {
-              const card = await response.json();
-              if (!unique || !names.has(card.name)) {
-                if (unique) {
-                  names.add(card.name);
-                  uniqueAttempts = 0;
-                }
-                targetArray.push(card);
-                added++;
-              } else {
-                uniqueAttempts++;
-              }
-            } else {
-              uniqueAttempts++;
+        for (const card of shuffled) {
+          if (!seen.has(card.name)) {
+            seen.add(card.name);
+            selected.push(card);
+            if (selected.length === requestedCount) {
+              break;
             }
           } catch (e) {
             console.error('Error fetching card:', e);
@@ -182,22 +170,72 @@
           await new Promise(resolve => setTimeout(resolve, 550));
         }
 
-        return count - added;
+        const shortage = Math.max(0, requestedCount - selected.length);
+        return { selected, shortage };
       }
 
-      // Fetch cards for each type
-      await fetchCards(creaturesDeck, creatures, `type:creature+legal:edh+id<=${commanderColors}+-is:commander`);
-      await fetchCards(artifactsDeck, artifacts, `type:artifact+legal:edh+id<=${commanderColors}`);
-      const failedNonBasicLands = await fetchCards(landsDeck, lands, `type:land+legal:edh+id<=${commanderColors}+-type:basic`, true, 15);
-      await fetchCards(instantsDeck, instants, `type:instant+legal:edh+id<=${commanderColors}`);
-      await fetchCards(sorceriesDeck, sorceries, `type:sorcery+legal:edh+id<=${commanderColors}`);
-      await fetchCards(planeswalkersDeck, planeswalkers, `type:planeswalker+legal:edh+id<=${commanderColors}`);
+      async function fetchCardsByType(typeQuery, requestedCount) {
+        if(requestedCount === 0) {
+          return { selected: [], shortage: 0 };
+        }
+        const query = encodeURIComponent(`type:${typeQuery} legal:edh id<=${commanderColors} -is:commander`);
+        const response = await fetch(`https://api.scryfall.com/cards/search?q=${query}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch cards from Scryfall.');
+        }
+        const results = await response.json();
+        const firstPageCards = Array.isArray(results.data) ? results.data : [];
+        return selectUniqueCards(firstPageCards, requestedCount);
+      }
 
-      const nonBasicLands = landsDeck;
-      const totalBasicLands = basicLands + failedNonBasicLands;
+      const creatureSelection = await fetchCardsByType('creature', creatures);
+      const artifactSelection = await fetchCardsByType('artifact', artifacts);
+      const landSelection = await fetchCardsByType('land -type:basic', lands);
+      const instantSelection = await fetchCardsByType('instant', instants);
+      const sorcerySelection = await fetchCardsByType('sorcery', sorceries);
+      const planeswalkerSelection = await fetchCardsByType('planeswalker', planeswalkers);
 
-      // Distribute basic lands evenly across commander's colors
-      if (totalBasicLands > 0) {
+      creaturesDeck.push(...creatureSelection.selected);
+      artifactsDeck.push(...artifactSelection.selected);
+      landsDeck.push(...landSelection.selected);
+      instantsDeck.push(...instantSelection.selected);
+      sorceriesDeck.push(...sorcerySelection.selected);
+      planeswalkersDeck.push(...planeswalkerSelection.selected);
+
+      basicLandCount += creatureSelection.shortage;
+      basicLandCount += artifactSelection.shortage;
+      basicLandCount += landSelection.shortage;
+      basicLandCount += instantSelection.shortage;
+      basicLandCount += sorcerySelection.shortage;
+      basicLandCount += planeswalkerSelection.shortage;
+
+      const displayGroups = [
+        { label: 'Creatures', cards: creaturesDeck },
+        { label: 'Artifacts', cards: artifactsDeck },
+        { label: 'Instants', cards: instantsDeck },
+        { label: 'Sorceries', cards: sorceriesDeck },
+        { label: 'Planeswalkers', cards: planeswalkersDeck }
+      ];
+
+      [creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck].forEach(arr =>
+        arr.sort((a, b) => a.name.localeCompare(b.name))
+      );
+
+      let html = '';
+      displayGroups.forEach(group => {
+        if (group.cards.length > 0) {
+          html += `<h4>${group.label} (${group.cards.length})</h4><ul>`;
+          group.cards.forEach(card => {
+            html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+          });
+          html += '</ul>';
+        }
+      });
+
+      const totalLandCount = landsDeck.length + basicLandCount;
+      const basicLandEntries = [];
+
+      if (basicLandCount > 0) {
         const displayOrder = ['w', 'u', 'b', 'r', 'g', 'c'];
         const landNameMap = {
           w: 'Plains',
@@ -217,8 +255,8 @@
           colorKeys = ['c'];
         }
 
-        const perColor = Math.floor(basicLands / colorKeys.length);
-        let extra = basicLands % colorKeys.length;
+        const perColor = Math.floor(basicLandCount / colorKeys.length);
+        let extra = basicLandCount % colorKeys.length;
 
         colorKeys.forEach(color => {
           let count = perColor;
@@ -232,43 +270,18 @@
         });
       }
 
-      const displayGroups = [
-        { label: 'Creatures', cards: creaturesDeck },
-        { label: 'Artifacts', cards: artifactsDeck },
-        { label: 'Instants', cards: instantsDeck },
-        { label: 'Sorceries', cards: sorceriesDeck },
-        { label: 'Planeswalkers', cards: planeswalkersDeck }
-      ];
-
-      [creaturesDeck, artifactsDeck, nonBasicLands, instantsDeck, sorceriesDeck, planeswalkersDeck].forEach(arr =>
-        arr.sort((a, b) => a.name.localeCompare(b.name))
-      );
-
-      let html = '';
-      displayGroups.forEach(group => {
-        if (group.cards.length > 0) {
-          html += `<h4>${group.label} (${group.cards.length})</h4><ul>`;
-          group.cards.forEach(card => {
-            html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
-          });
-          html += '</ul>';
-        }
-      });
-
-      const totalLandCount = nonBasicLands.length + totalBasicLands;
-
-      if (nonBasicLands.length > 0 || basicLandEntries.length > 0) {
+      if (landsDeck.length > 0 || basicLandEntries.length > 0) {
         html += `<h4>Lands (${totalLandCount})</h4>`;
 
-        if (nonBasicLands.length > 0) {
-          nonBasicLands.forEach(card => {
+        if (landsDeck.length > 0) {
+          landsDeck.forEach(card => {
             html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
           });
           html += '</ul>';
         }
 
         if (basicLandEntries.length > 0) {
-          const basicLandCount = basicLandEntries.reduce((sum, entry) => sum + entry.count, 0);
+          const basicTotal = basicLandEntries.reduce((sum, entry) => sum + entry.count, 0);
           basicLandEntries.forEach(entry => {
             html += `<li>${entry.name} x ${entry.count}</li>`;
           });
