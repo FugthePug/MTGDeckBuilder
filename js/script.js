@@ -6,6 +6,10 @@
 
     let selectedColors = [];
 
+    function updateButtonState() {
+      generateBtn.disabled = selectedColors.length === 0;
+    }
+
     colorButtons.forEach(button => {
       button.addEventListener('click', () => {
         const color = button.dataset.color;
@@ -19,6 +23,7 @@
           });
 
           button.classList.add('active');
+          updateButtonState();
           return;
         }
 
@@ -36,8 +41,12 @@
           selectedColors.push(color);
           button.classList.add('active');
         }
+        updateButtonState();
       });
     });
+
+    // Initially disable the button
+    updateButtonState();
 
     generateBtn.addEventListener('click', async () => {
       const userColors = selectedColors.sort().join('');
@@ -67,15 +76,241 @@
           : commander.card_faces?.[0]?.image_uris?.normal;
 
         resultDiv.innerHTML = `
-          <h2>${commander.name}</h2>
+          <h2><a href="${commander.scryfall_uri}" target="_blank">${commander.name}</a></h2>
           <p><strong>Mana Cost:</strong> ${commander.mana_cost || 'N/A'}</p>
           <p><strong>Type:</strong> ${commander.type_line}</p>
           <p><strong>Oracle Text:</strong></p>
           <p>${commander.oracle_text || 'No text available.'}</p>
           ${imageUrl ? `<img src="${imageUrl}" alt="${commander.name}">` : ''}
+          <button id="clearCommanderBtn" class="secondary-btn danger">Clear Commander</button>
+          <div class="deck-controls">
+            <h3>Deck Builder</h3>
+            <div id="cardCount">Current Card Count: 99/99</div>
+            <div class="deck-grid">
+              <label>Creatures: <input type="number" id="creatures" min="0" value="30"></label>
+              <label>Artifacts: <input type="number" id="artifacts" min="0" value="10"></label>
+              <label>Lands: <input type="number" id="lands" min="0" value="38"></label>
+              <label>Instants: <input type="number" id="instants" min="0" value="5"></label>
+              <label>Sorceries: <input type="number" id="sorceries" min="0" value="16"></label>
+              <label>Planeswalkers: <input type="number" id="planeswalkers" min="0" value="0"></label>
+            </div>
+            <div class="deck-action-row">
+              <button id="buildDeckBtn">Build a Deck!</button>
+            </div>
+            <div id="deckResult"></div>
+            <div class="clear-deck-row hidden">
+              <button id="clearDeckBtn" class="secondary-btn danger" type="button">Clear Deck</button>
+            </div>
+          </div>
         `;
+
+        // Add event listeners for inputs
+        const inputs = document.querySelectorAll('.deck-controls input');
+        inputs.forEach(input => input.addEventListener('input', checkSum));
+
+        // Initial check
+        checkSum();
+
+        function checkSum() {
+          const sum = Array.from(inputs).reduce((acc, input) => acc + parseInt(input.value || 0), 0);
+          document.getElementById('cardCount').textContent = `Current Card Count: ${sum}/99`;
+          document.getElementById('buildDeckBtn').disabled = sum !== 99;
+        }
+
+        // Add event listeners for build and clear buttons
+        document.getElementById('buildDeckBtn').addEventListener('click', () => buildDeck(userColors));
+        document.getElementById('clearDeckBtn').addEventListener('click', clearDeck);
+        document.getElementById('clearCommanderBtn').addEventListener('click', clearCommander);
+
       } catch (error) {
         loadingDiv.textContent = '';
         errorDiv.textContent = `Error: ${error.message}`;
       }
     });
+
+    async function buildDeck(commanderColors) {
+      const creatures = parseInt(document.getElementById('creatures').value);
+      const artifacts = parseInt(document.getElementById('artifacts').value);
+      const lands = parseInt(document.getElementById('lands').value);
+      const instants = parseInt(document.getElementById('instants').value);
+      const sorceries = parseInt(document.getElementById('sorceries').value);
+      const planeswalkers = parseInt(document.getElementById('planeswalkers').value);
+
+      const deckResultDiv = document.getElementById('deckResult');
+      deckResultDiv.innerHTML = 'Building deck. This will take at least one minute...';
+
+      const deckControls = document.querySelectorAll('.deck-controls input, #buildDeckBtn');
+      deckControls.forEach(element => element.disabled = true);
+
+      const creaturesDeck = [];
+      const artifactsDeck = [];
+      const landsDeck = [];
+      const instantsDeck = [];
+      const sorceriesDeck = [];
+      const planeswalkersDeck = [];
+      const basicLands = {};
+
+      // Function to fetch cards into a specific array
+      async function fetchCards(targetArray, count, query, unique = true) {
+        const names = new Set();
+        let added = 0;
+        while (added < count) {
+          try {
+            const response = await fetch(`https://api.scryfall.com/cards/random?q=${query}`);
+            if (response.ok) {
+              const card = await response.json();
+              if (!unique || !names.has(card.name)) {
+                if (unique) names.add(card.name);
+                targetArray.push(card);
+                added++;
+              }
+            }
+          } catch (e) {
+            console.error('Error fetching card:', e);
+          }
+          await new Promise(resolve => setTimeout(resolve, 550));
+        }
+      }
+
+      // Fetch cards for each type
+      await fetchCards(creaturesDeck, creatures, `type:creature+legal:edh+id<=${commanderColors}+-is:commander`);
+      await fetchCards(artifactsDeck, artifacts, `type:artifact+legal:edh+id<=${commanderColors}`);
+      await fetchCards(landsDeck, lands, `type:land+legal:edh+id<=${commanderColors}`, false);
+      await fetchCards(instantsDeck, instants, `type:instant+legal:edh+id<=${commanderColors}`);
+      await fetchCards(sorceriesDeck, sorceries, `type:sorcery+legal:edh+id<=${commanderColors}`);
+      await fetchCards(planeswalkersDeck, planeswalkers, `type:planeswalker+legal:edh+id<=${commanderColors}`);
+
+      const nonBasicLands = [];
+      landsDeck.forEach(card => {
+        if (card.type_line.includes('Basic')) {
+          const landType = card.name;
+          if (!basicLands[landType]) {
+            basicLands[landType] = { count: 0, uri: card.scryfall_uri };
+          }
+          basicLands[landType].count++;
+        } else {
+          nonBasicLands.push(card);
+        }
+      });
+
+      const displayGroups = [
+        { label: 'Creatures', cards: creaturesDeck },
+        { label: 'Artifacts', cards: artifactsDeck },
+        { label: 'Instants', cards: instantsDeck },
+        { label: 'Sorceries', cards: sorceriesDeck },
+        { label: 'Planeswalkers', cards: planeswalkersDeck }
+      ];
+
+      [creaturesDeck, artifactsDeck, nonBasicLands, instantsDeck, sorceriesDeck, planeswalkersDeck].forEach(arr =>
+        arr.sort((a, b) => a.name.localeCompare(b.name))
+      );
+
+      let html = '';
+      displayGroups.forEach(group => {
+        if (group.cards.length > 0) {
+          html += `<h4>${group.label} (${group.cards.length})</h4><ul>`;
+          group.cards.forEach(card => {
+            html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+          });
+          html += '</ul>';
+        }
+      });
+
+      const totalBasicLands = Object.values(basicLands).reduce((sum, land) => sum + land.count, 0);
+      const totalDisplayedLands = nonBasicLands.length + totalBasicLands;
+      let extraLandEntries = [];
+      let totalLandCount = totalDisplayedLands;
+
+      if (totalDisplayedLands < lands) {
+        const missing = lands - totalDisplayedLands;
+        const displayOrder = ['w', 'u', 'b', 'r', 'g', 'c'];
+        const landNameMap = {
+          w: 'Plains',
+          u: 'Island',
+          b: 'Swamp',
+          r: 'Mountain',
+          g: 'Forest',
+          c: 'Wasteland'
+        };
+
+        let colorKeys = commanderColors
+          .split('')
+          .filter(c => displayOrder.includes(c))
+          .sort((a, b) => displayOrder.indexOf(a) - displayOrder.indexOf(b));
+
+        if (colorKeys.length === 0) {
+          colorKeys = ['c'];
+        }
+
+        const perColor = Math.floor(missing / colorKeys.length);
+        let extra = missing % colorKeys.length;
+
+        colorKeys.forEach(color => {
+          let count = perColor;
+          if (extra > 0) {
+            count += 1;
+            extra -= 1;
+          }
+          if (count > 0) {
+            extraLandEntries.push({ name: landNameMap[color], count });
+            totalLandCount += count;
+          }
+        });
+      }
+
+      if (nonBasicLands.length > 0 || totalBasicLands > 0 || extraLandEntries.length > 0) {
+        html += `<h4>Lands (${totalLandCount})</h4><ul>`;
+        nonBasicLands.forEach(card => {
+          html += `<li class="card-entry"><a href="${card.scryfall_uri}" target="_blank">${card.name}</a><div class="card-tooltip"><img src="${getCardImageUrl(card)}" alt="${card.name}"></div></li>`;
+        });
+
+        Object.keys(basicLands).sort().forEach(land => {
+          html += `<li><a href="${basicLands[land].uri}" target="_blank">${land} x ${basicLands[land].count}</a></li>`;
+        });
+
+        extraLandEntries.forEach(entry => {
+          html += `<li>${entry.name} x ${entry.count}</li>`;
+        });
+
+        html += '</ul>';
+      }
+
+      deckResultDiv.innerHTML = html;
+      const clearDeckWindow = document.querySelector('.clear-deck-row');
+      if (clearDeckWindow) {
+        clearDeckWindow.classList.remove('hidden');
+      }
+    }
+
+    function clearDeck() {
+      const deckResultDiv = document.getElementById('deckResult');
+      deckResultDiv.innerHTML = '';
+      const inputs = document.querySelectorAll('.deck-controls input');
+      inputs.forEach(input => input.disabled = false);
+      const buildBtn = document.getElementById('buildDeckBtn');
+      const sum = Array.from(inputs).reduce((acc, input) => acc + parseInt(input.value || 0), 0);
+      buildBtn.disabled = sum !== 99;
+      const clearDeckRow = document.querySelector('.clear-deck-row');
+      if (clearDeckRow) {
+        clearDeckRow.classList.add('hidden');
+      }
+    }
+
+    function clearCommander() {
+      resultDiv.innerHTML = '';
+      errorDiv.textContent = '';
+      loadingDiv.textContent = '';
+      selectedColors = [];
+      colorButtons.forEach(btn => btn.classList.remove('active'));
+      updateButtonState();
+      const clearDeckRow = document.querySelector('.clear-deck-row');
+      if (clearDeckRow) {
+        clearDeckRow.classList.add('hidden');
+      }
+    }
+
+    function getCardImageUrl(card) {
+      return card.image_uris
+        ? card.image_uris.normal
+        : card.card_faces?.[0]?.image_uris?.normal || '';
+    }
