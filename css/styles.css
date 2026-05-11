@@ -59,6 +59,11 @@
       background: #45a049;
     }
 
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
     .error {
       color: #ff6b6b;
       margin-top: 1rem;
@@ -174,4 +179,133 @@
     .colorless {
       background: #b0b0b0;
       color: black;
+    }
+
+    .deck-controls {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid #444;
+    }
+
+    .deck-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    .deck-controls label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 0.25rem 0;
+    }
+
+    .deck-controls input {
+      width: 80px;
+      margin-left: 0.75rem;
+    }
+
+    .deck-controls button {
+      margin-top: 1rem;
+      width: auto;
+      padding: 0.5rem 1rem;
+    }
+
+    .deck-action-row {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .clear-deck-row {
+      display: flex;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+
+    .secondary-btn {
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+    }
+
+    .secondary-btn.danger {
+      background: #c0392b;
+      border-color: #992d22;
+    }
+
+    .secondary-btn.danger:hover {
+      background: #a13027;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .deck-controls button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    .deck-controls a,
+    #deckResult a,
+    #result a {
+      color: white;
+      text-decoration: underline;
+    }
+
+    .card-entry {
+      position: relative;
+    }
+
+    .card-tooltip {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 0.35rem;
+      padding: 0.25rem;
+      background: #111;
+      border: 1px solid #444;
+      border-radius: 8px;
+      width: 220px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .card-entry:hover .card-tooltip {
+      display: block;
+    }
+
+    .card-tooltip img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 6px;
+    }
+
+    #cardCount {
+      font-weight: bold;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    #deckResult {
+      margin-top: 1rem;
+      text-align: left;
+    }
+
+    #deckResult h4 {
+      margin-bottom: 0.5rem;
+    }
+
+    #deckResult ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    #deckResult li {
+      margin: 0.25rem 0;
     }
