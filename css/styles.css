@@ -147,8 +147,8 @@
     }
 
     .color-btn.active {
-      border: 3px solid #ffffff;
-      box-shadow: 0 0 12px rgba(255,255,255,0.7);
+      border: 5px solid #ff4be1;
+      box-shadow: 0 0 12px rgba(232, 65, 238, 0.7);
     }
 
     .white {
