@@ -5,6 +5,8 @@
     const colorButtons = document.querySelectorAll('.color-btn');
 
     let selectedColors = [];
+    let currentCommander = null;
+    let currentDeckData = null;
 
     function updateButtonState() {
       generateBtn.disabled = selectedColors.length === 0;
@@ -68,6 +70,7 @@
         }
 
         const commander = await response.json();
+        currentCommander = commander;
 
         loadingDiv.textContent = '';
 
@@ -100,6 +103,7 @@
             </div>
             <div id="deckResult"></div>
             <div class="clear-deck-row hidden">
+              <button id="copyDeckBtn" class="secondary-btn rainbow-pulsate" type="button">Copy Deck</button>
               <button id="clearDeckBtn" class="secondary-btn danger" type="button">Clear Deck</button>
             </div>
           </div>
@@ -121,6 +125,7 @@
         // Add event listeners for build and clear buttons
         document.getElementById('buildDeckBtn').addEventListener('click', () => buildDeck(userColors));
         document.getElementById('clearDeckBtn').addEventListener('click', clearDeck);
+        document.getElementById('copyDeckBtn').addEventListener('click', copyDeck);
         document.getElementById('clearCommanderBtn').addEventListener('click', clearCommander);
 
       } catch (error) {
@@ -173,6 +178,15 @@
       basicLandCount += sorcerySelection.shortage;
       basicLandCount += planeswalkerSelection.shortage;
 
+      currentDeckData = {
+        creatures: creaturesDeck,
+        artifacts: artifactsDeck,
+        lands: landsDeck,
+        instants: instantsDeck,
+        sorceries: sorceriesDeck,
+        planeswalkers: planeswalkersDeck,
+        basicLandCount: basicLandCount
+      };
       displayDeck(creaturesDeck, artifactsDeck, landsDeck, instantsDeck, sorceriesDeck, planeswalkersDeck, commanderColors, basicLandCount, deckResultDiv);
     }
 
@@ -267,7 +281,7 @@
             b: 'Swamp',
             r: 'Mountain',
             g: 'Forest',
-            c: 'Wasteland'
+            c: 'Wastes'
           };
 
           let colorKeys = commanderColors
@@ -322,6 +336,7 @@
     function clearDeck() {
       const deckResultDiv = document.getElementById('deckResult');
       deckResultDiv.innerHTML = '';
+      currentDeckData = null;
       const inputs = document.querySelectorAll('.deck-controls input');
       inputs.forEach(input => input.disabled = false);
       const buildBtn = document.getElementById('buildDeckBtn');
@@ -335,11 +350,118 @@
       loadingDiv.textContent = '';
     }
 
+    function copyDeck() {
+      if (!currentCommander || !currentDeckData) {
+        alert('No deck to copy');
+        return;
+      }
+
+      const basicLandMap = {
+        'Plains': { set: 'FIN', collector: '294' },
+        'Island': { set: 'FIN', collector: '298' },
+        'Swamp': { set: 'FIN', collector: '302' },
+        'Mountain': { set: 'FIN', collector: '305' },
+        'Forest': { set: 'FIN', collector: '307' },
+        'Wastes': { set: 'FIN', collector: '309' }
+      };
+
+      let deckText = '';
+      
+      // Add commander
+      const commanderSet = currentCommander.set.toUpperCase();
+      const commanderCollector = currentCommander.collector_number;
+      deckText += `1 ${currentCommander.name} (${commanderSet}) ${commanderCollector}\n`;
+
+      // Helper function to add cards from an array
+      const addCardsToText = (cardArray) => {
+        cardArray.forEach(card => {
+          const cardSet = card.set.toUpperCase();
+          const cardCollector = card.collector_number;
+          deckText += `1 ${card.name} (${cardSet}) ${cardCollector}\n`;
+        });
+      };
+
+      // Add all card types
+      addCardsToText(currentDeckData.creatures);
+      addCardsToText(currentDeckData.artifacts);
+      addCardsToText(currentDeckData.instants);
+      addCardsToText(currentDeckData.sorceries);
+      addCardsToText(currentDeckData.planeswalkers);
+      addCardsToText(currentDeckData.lands);
+
+      // Add basic lands
+      const displayOrder = ['W', 'U', 'B', 'R', 'G'];
+      const landNameMap = {
+        'W': 'Plains',
+        'U': 'Island',
+        'B': 'Swamp',
+        'R': 'Mountain',
+        'G': 'Forest',
+        'C': 'Wastes'
+      };
+
+      if (currentDeckData.basicLandCount > 0) {
+        const commanderColors = currentCommander.color_identity ? currentCommander.color_identity.join('') : '';
+        console.log('Commander:', currentCommander.name);
+        console.log('Commander color_identity:', currentCommander.color_identity);
+        console.log('Commander colors string:', commanderColors);
+        console.log('Total basic lands to distribute:', currentDeckData.basicLandCount);
+        
+        let colorKeys = commanderColors
+          .split('')
+          .filter(c => displayOrder.includes(c))
+          .sort((a, b) => displayOrder.indexOf(a) - displayOrder.indexOf(b));
+
+        if (colorKeys.length === 0) {
+          colorKeys = ['c'];
+        }
+
+        console.log('Color keys after filtering:', colorKeys);
+
+        const perColor = Math.floor(currentDeckData.basicLandCount / colorKeys.length);
+        let extra = currentDeckData.basicLandCount % colorKeys.length;
+
+        console.log('Per color count:', perColor, 'Extra lands:', extra);
+
+        colorKeys.forEach(color => {
+          let count = perColor;
+          if (extra > 0) {
+            count += 1;
+            extra -= 1;
+          }
+          if (count > 0) {
+            const landName = landNameMap[color];
+            const basicLandMap = {
+              'Plains': { set: 'FIN', collector: '294' },
+              'Island': { set: 'FIN', collector: '298' },
+              'Swamp': { set: 'FIN', collector: '302' },
+              'Mountain': { set: 'FIN', collector: '305' },
+              'Forest': { set: 'FIN', collector: '307' },
+              'Wastes': { set: 'FIN', collector: '309' }
+            };
+            const landInfo = basicLandMap[landName];
+            console.log(`Adding ${count} ${landName} (${landInfo.set}) ${landInfo.collector}`);
+            deckText += `${count} ${landName} (${landInfo.set}) ${landInfo.collector}\n`;
+          }
+        });
+      }
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(deckText.trim()).then(() => {
+        alert('Deck copied to clipboard!');
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy deck to clipboard');
+      });
+    }
+
     function clearCommander() {
       resultDiv.innerHTML = '';
       errorDiv.textContent = '';
       loadingDiv.textContent = '';
       selectedColors = [];
+      currentCommander = null;
+      currentDeckData = null;
       colorButtons.forEach(btn => btn.classList.remove('active'));
       updateButtonState();
       if (document.getElementById('deckResult')) {
