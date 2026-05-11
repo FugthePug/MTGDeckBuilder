@@ -133,6 +133,7 @@
       object-position: center;
       opacity: 0.95;
       transition: transform 0.2s ease, opacity 0.2s ease;
+      pointer-events: none;
     }
 
     .color-btn:hover img.color-icon {
